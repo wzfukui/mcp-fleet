@@ -4,10 +4,11 @@ FROM python:3.11-slim
 # 设置工作目录
 WORKDIR /app
 
-# 1. 安装系统级依赖
+# 1. 更换为中国大陆镜像源并安装系统级依赖
 # curl: 用于下载
 # git: uv 有时需要拉取 git 依赖
-RUN apt-get update && apt-get install -y curl git && rm -rf /var/lib/apt/lists/*
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y curl git && rm -rf /var/lib/apt/lists/*
 
 # 2. 安装 uv (现代 Python 包管理工具)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
@@ -17,7 +18,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # mcp[sse]: MCP 协议核心库
 # fastapi uvicorn: Web 服务
 # pandas numpy requests: 数据分析与网络请求常用库
-RUN pip install --no-cache-dir \
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
     "mcp[sse]" \
     fastapi \
     uvicorn[standard] \

@@ -22,7 +22,7 @@ class MCPServerBase(BaseModel):
     name: str
     description: Optional[str] = None
     entry_object: str = "mcp"
-    port: Optional[int] = None # 用户配置的端口
+    ports: Optional[str] = None # 用户配置的端口列表（逗号分隔）
     command: Optional[str] = None
     args: Optional[str] = None
 
@@ -32,7 +32,8 @@ class MCPServerCreate(MCPServerBase):
 class MCPServerUpdate(BaseModel):
     description: Optional[str] = None
     entry_object: Optional[str] = None
-    port: Optional[int] = None
+    ports: Optional[str] = None
+    port: Optional[int] = None  # 向后兼容，支持单个端口
     command: Optional[str] = None
     args: Optional[str] = None
 
@@ -40,7 +41,8 @@ class MCPServer(MCPServerBase):
     id: str
     status: ServerStatus
     host_port: Optional[int] = None
-    port: Optional[int] = None
+    ports: Optional[str] = None
+    host_ports: Optional[str] = None
     command: Optional[str] = None
     args: Optional[str] = None
     created_at: datetime

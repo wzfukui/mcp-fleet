@@ -73,11 +73,24 @@ export function ServerCard({ server, onUpdate }: ServerCardProps) {
         </CardHeader>
         <CardContent className='pb-4 space-y-2'>
           <div className='text-sm text-muted-foreground'>
-            <span className='font-medium'>Entry:</span> {server.entry_object}
+            <span className='font-medium'>入口对象:</span> {server.entry_object}
           </div>
+          {/* 显示分配的端口（未启动时） */}
+          {server.ports && !server.host_port && (
+            <div className='text-sm text-muted-foreground'>
+              <span className='font-medium'>分配端口:</span> {server.ports}
+              <Badge variant='outline' className='ml-2 text-xs'>未启动</Badge>
+            </div>
+          )}
+          {/* 显示运行时端口（已启动时） */}
           {server.host_port && (
             <div className='text-sm text-muted-foreground'>
-              <span className='font-medium'>Port:</span> {server.host_port}
+              <span className='font-medium'>运行端口:</span> {server.host_port}
+              {server.host_ports && (
+                <span className='ml-2 text-xs text-muted-foreground'>
+                  (多端口)
+                </span>
+              )}
             </div>
           )}
           {server.sse_url && (

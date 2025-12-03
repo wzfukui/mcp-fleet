@@ -28,8 +28,9 @@ class MCPServer(Base):
     # 运行时状态
     status = Column(Enum(ServerStatus), default=ServerStatus.STOPPED)
     container_id = Column(String, nullable=True) # Docker Container ID
-    host_port = Column(Integer, nullable=True) # 分配的宿主机端口
-    port = Column(Integer, nullable=True) # 用户配置的固定端口
+    host_port = Column(Integer, nullable=True) # 分配的宿主机端口（主端口）
+    ports = Column(String, nullable=True) # 用户配置的端口列表（逗号分隔，如 "8000,8001"）
+    host_ports = Column(String, nullable=True) # 实际分配的宿主机端口列表（JSON 格式）
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

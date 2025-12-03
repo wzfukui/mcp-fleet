@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import {
-  BadgeCheck,
+  Settings,
   ChevronsUpDown,
   LogOut,
 } from 'lucide-react'
@@ -91,8 +91,8 @@ export function NavUser({ user: defaultUser }: NavUserProps) {
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                   <Link to='/settings'>
-                    <BadgeCheck />
-                    Account Settings
+                    <Settings />
+                    设置
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
@@ -102,7 +102,7 @@ export function NavUser({ user: defaultUser }: NavUserProps) {
                 onClick={() => setOpen(true)}
               >
                 <LogOut />
-                Sign out
+                退出登录
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

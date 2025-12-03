@@ -24,8 +24,13 @@ export const sidebarData: SidebarData = {
       title: 'Management',
       items: [
         {
-          title: 'Servers',
+          title: 'Dashboard',
           url: '/',
+          icon: LayoutDashboard,
+        },
+        {
+          title: 'Servers',
+          url: '/servers',
           icon: Server,
         },
         {

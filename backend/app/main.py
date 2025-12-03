@@ -85,9 +85,10 @@ async def create_server(
     name: str = Form(...),
     description: str = Form(None),
     entry_object: str = Form("mcp"),
-    port: int = Form(None), # 允许用户指定端口
+    ports: str = Form(None), # 允许用户指定端口列表（逗号分隔）
     command: str = Form(None), # 自定义命令
     args: str = Form(None), # 自定义参数
+    env_vars: str = Form(None), # 环境变量 JSON 字符串
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
@@ -130,20 +131,59 @@ async def create_server(
         except tarfile.ReadError:
              raise HTTPException(status_code=400, detail="Invalid tar file")
 
-    # 4. 写入数据库
+    # 4. 预分配端口（如果用户指定了端口）
+    allocated_ports = None
+    if ports:
+        try:
+            # 解析用户指定的端口
+            requested_ports = [int(p.strip()) for p in ports.split(',') if p.strip()]
+            # 检查端口是否可用
+            for port in requested_ports:
+                if not docker_manager._is_port_free(port):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"端口 {port} 已被占用，请选择其他端口"
+                    )
+            allocated_ports = ports  # 用户指定的端口
+        except ValueError:
+            raise HTTPException(status_code=400, detail="端口格式错误，请使用逗号分隔的数字")
+    else:
+        # 自动分配一个端口
+        auto_port = docker_manager._find_free_port()
+        if auto_port:
+            allocated_ports = str(auto_port)
+    
+    # 5. 写入数据库
     db_server = models.MCPServer(
         id=server_id,
         name=name,
         description=description,
         source_code_path=base_path,
         entry_object=entry_object,
-        port=port,
+        ports=allocated_ports,  # 保存分配的端口
         command=command,
         args=args,
         status=models.ServerStatus.STOPPED
     )
     db.add(db_server)
     db.commit()
+    
+    # 6. 处理环境变量
+    if env_vars:
+        try:
+            env_list = json.loads(env_vars)
+            for env in env_list:
+                db_env = models.EnvironmentVariable(
+                    server_id=server_id,
+                    key=env.get('key', ''),
+                    value=env.get('value', ''),
+                    is_secret=env.get('is_secret', False)
+                )
+                db.add(db_env)
+            db.commit()
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse env_vars JSON: {env_vars}")
+    
     db.refresh(db_server)
     return db_server
 
@@ -165,14 +205,45 @@ def update_server(
         server.description = server_update.description
     if server_update.entry_object is not None:
         server.entry_object = server_update.entry_object
-    if server_update.port is not None:
-        server.port = server_update.port
+    
+    # 处理端口更新（支持 port 和 ports 两种字段）
+    new_ports = server_update.ports or server_update.port
+    if new_ports is not None:
+        # 检查端口冲突
+        if new_ports:  # 如果不是空字符串
+            try:
+                requested_ports = [int(p.strip()) for p in str(new_ports).split(',') if p.strip()]
+                # 检查端口是否被其他服务器占用
+                for port in requested_ports:
+                    # 查找是否有其他服务器使用了这个端口
+                    other_server = db.query(models.MCPServer).filter(
+                        models.MCPServer.id != server_id,
+                        models.MCPServer.ports.like(f'%{port}%')
+                    ).first()
+                    if other_server:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"端口 {port} 已被服务器 '{other_server.name}' 占用"
+                        )
+                    # 检查端口是否被系统占用
+                    if not docker_manager._is_port_free(port):
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"端口 {port} 已被系统占用"
+                        )
+                server.ports = str(new_ports)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="端口格式错误，请使用逗号分隔的数字")
+        else:
+            # 如果传入空字符串，自动分配一个端口
+            auto_port = docker_manager._find_free_port()
+            if auto_port:
+                server.ports = str(auto_port)
+    
     if server_update.command is not None:
         server.command = server_update.command
     if server_update.args is not None:
         server.args = server_update.args
-        
-    # TODO: 支持更新环境变量 (EnvVars)
     
     db.commit()
     db.refresh(server)
@@ -227,7 +298,6 @@ def server_action(
             if server.args:
                 # 简单的空格分割，更复杂的需要 json 解析
                 try:
-                    import json
                     args = json.loads(server.args)
                     if isinstance(args, list):
                         cmd_list.extend(args)
@@ -236,19 +306,31 @@ def server_action(
                 except:
                     cmd_list.extend(server.args.split())
 
+        # 解析端口列表
+        requested_ports = None
+        if server.ports:
+            try:
+                # 支持逗号分隔的端口列表
+                requested_ports = [int(p.strip()) for p in server.ports.split(',') if p.strip()]
+            except ValueError:
+                logger.warning(f"Failed to parse ports: {server.ports}")
+
         try:
-            # 传递 source_code_path 和 requested_port 给 run_container
+            # 传递 source_code_path 和 requested_ports 给 run_container
             result = docker_manager.run_container(
                 server.id, 
                 server.name, 
                 server.source_code_path, 
                 env_map,
-                requested_port=server.port,
+                requested_ports=requested_ports,
                 command=cmd_list
             )
             
             server.container_id = result["container_id"]
             server.host_port = result["port"]
+            # 保存端口映射信息
+            if "ports" in result:
+                server.host_ports = json.dumps(result["ports"])
             server.status = models.ServerStatus.RUNNING
             db.commit()
             return {"message": "Server started", "details": result}
@@ -311,7 +393,6 @@ def server_action(
             cmd_list = [server.command]
             if server.args:
                 try:
-                    import json
                     args = json.loads(server.args)
                     if isinstance(args, list):
                         cmd_list.extend(args)
@@ -320,17 +401,27 @@ def server_action(
                 except:
                     cmd_list.extend(server.args.split())
 
+        # 解析端口列表
+        requested_ports = None
+        if server.ports:
+            try:
+                requested_ports = [int(p.strip()) for p in server.ports.split(',') if p.strip()]
+            except ValueError:
+                logger.warning(f"Failed to parse ports: {server.ports}")
+
         try:
             result = docker_manager.run_container(
                 server.id, 
                 server.name, 
                 server.source_code_path, 
                 env_map,
-                requested_port=server.port,
+                requested_ports=requested_ports,
                 command=cmd_list
             )
             server.container_id = result["container_id"]
             server.host_port = result["port"]
+            if "ports" in result:
+                server.host_ports = json.dumps(result["ports"])
             server.status = models.ServerStatus.RUNNING
             db.commit()
             return {"message": "Server restarted", "details": result}
@@ -357,6 +448,109 @@ def server_action(
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
     return {"message": "Action not supported"}
+
+@app.get("/api/system/ports")
+def get_port_pool_status(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """获取端口池状态：可用端口范围、已分配端口等信息"""
+    try:
+        # 端口池配置
+        PORT_POOL_START = 30000
+        PORT_POOL_END = 40000
+        
+        # 获取所有服务器（包括未启动的）及其分配的端口
+        servers = db.query(models.MCPServer).all()
+        
+        allocated_ports = []  # 已分配的端口
+        port_assignments = []
+        
+        for server in servers:
+            # 收集分配的端口（ports 字段）
+            if server.ports:
+                try:
+                    ports_list = [int(p.strip()) for p in server.ports.split(',') if p.strip()]
+                    for port in ports_list:
+                        if port not in allocated_ports:
+                            allocated_ports.append(port)
+                        port_assignments.append({
+                            "server_id": server.id,
+                            "server_name": server.name,
+                            "port": port,
+                            "status": server.status.value,
+                            "is_allocated": True
+                        })
+                except (ValueError, AttributeError):
+                    pass
+            
+            # 收集运行时端口（host_port 和 host_ports）
+            if server.host_port and server.host_port not in allocated_ports:
+                allocated_ports.append(server.host_port)
+                # 如果已经在 port_assignments 中，更新状态
+                found = False
+                for assignment in port_assignments:
+                    if assignment["port"] == server.host_port and assignment["server_id"] == server.id:
+                        assignment["is_running"] = True
+                        found = True
+                        break
+                if not found:
+                    port_assignments.append({
+                        "server_id": server.id,
+                        "server_name": server.name,
+                        "port": server.host_port,
+                        "status": server.status.value,
+                        "is_allocated": True,
+                        "is_running": True
+                    })
+            
+            # 收集额外的运行时端口
+            if server.host_ports:
+                try:
+                    ports_map = json.loads(server.host_ports)
+                    for container_port, host_port in ports_map.items():
+                        if host_port not in allocated_ports:
+                            allocated_ports.append(host_port)
+                        port_assignments.append({
+                            "server_id": server.id,
+                            "server_name": server.name,
+                            "port": host_port,
+                            "container_port": int(container_port),
+                            "status": server.status.value,
+                            "is_allocated": True,
+                            "is_running": True
+                        })
+                except json.JSONDecodeError:
+                    pass
+        
+        # 计算可用端口数
+        # 实际可用端口 = 总端口数 - 已分配端口数
+        total_ports = PORT_POOL_END - PORT_POOL_START
+        available_ports_count = total_ports - len(allocated_ports)
+        
+        # 只检查前20个未分配的端口作为示例
+        sample_available_ports = []
+        checked_count = 0
+        for port in range(PORT_POOL_START, PORT_POOL_END):
+            if port not in allocated_ports:
+                if docker_manager._is_port_free(port):
+                    sample_available_ports.append(port)
+                    if len(sample_available_ports) >= 20:
+                        break
+                checked_count += 1
+                if checked_count >= 100:  # 最多检查100个端口
+                    break
+        
+        return {
+            "port_pool_start": PORT_POOL_START,
+            "port_pool_end": PORT_POOL_END,
+            "total_ports": total_ports,
+            "allocated_ports_count": len(allocated_ports),  # 改为 allocated
+            "available_ports_count": available_ports_count,
+            "allocated_ports": sorted(allocated_ports),  # 改为 allocated
+            "port_assignments": sorted(port_assignments, key=lambda x: x["port"]),
+            "sample_available_ports": sample_available_ports
+        }
+    except Exception as e:
+        logger.error(f"Error getting port pool status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get port pool status: {str(e)}")
 
 @app.get("/api/system/status")
 def get_system_status(current_user = Depends(get_current_user)):

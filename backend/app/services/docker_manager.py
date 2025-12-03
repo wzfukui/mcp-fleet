@@ -35,31 +35,39 @@ class DockerManager:
                       server_name: str, 
                       host_base_path: str, 
                       env_vars: Dict[str, str], 
-                      requested_port: Optional[int] = None,
+                      requested_ports: Optional[List[int]] = None,
                       command: Optional[List[str]] = None) -> Dict:
         """
         启动容器
-        返回: {"container_id": str, "port": int}
+        返回: {"container_id": str, "port": int, "ports": Dict[int, int]}
         
         :param host_base_path: 宿主机上该 Server 的基础数据目录 (包含 app/ 和 data/)
-        :param requested_port: 用户请求的固定端口，如果提供则尝试绑定
+        :param requested_ports: 用户请求的固定端口列表，如果提供则尝试绑定
         :param command: 可选的自定义启动命令 (override CMD)
         """
         if not self.client:
             raise RuntimeError("Docker client not initialized (Docker not running?)")
 
         # 1. 端口分配逻辑
-        port = None
-        if requested_port:
-            if self._is_port_free(requested_port):
-                port = requested_port
-            else:
-                raise RuntimeError(f"Requested port {requested_port} is not available")
+        port_mappings = {}  # {container_port: host_port}
+        
+        if requested_ports and len(requested_ports) > 0:
+            # 用户指定了端口列表
+            for idx, req_port in enumerate(requested_ports):
+                container_port = 8000 + idx  # 容器内端口从 8000 开始递增
+                if self._is_port_free(req_port):
+                    port_mappings[container_port] = req_port
+                else:
+                    raise RuntimeError(f"Requested port {req_port} is not available")
         else:
+            # 自动分配一个端口
             port = self._find_free_port()
-            
-        if not port:
-            raise RuntimeError("No free ports available")
+            if not port:
+                raise RuntimeError("No free ports available")
+            port_mappings[8000] = port
+        
+        # 主端口（第一个端口）
+        main_port = list(port_mappings.values())[0]
 
         # 2. 准备挂载目录路径
         host_app_path = os.path.join(host_base_path, "app")
@@ -75,15 +83,19 @@ class DockerManager:
             host_data_path: {'bind': '/app/data', 'mode': 'rw'}      # 数据持久化
         }
 
-        # 环境变量注入
+        # 环境变量注入（安全地传递给容器）
         environment = env_vars.copy()
         environment["MCP_SERVER_ID"] = server_id
+
+        # 构建端口映射字典
+        ports_dict = {f"{container_port}/tcp": host_port 
+                     for container_port, host_port in port_mappings.items()}
 
         run_kwargs = {
             "image": BASE_IMAGE,
             "name": f"mcp-{server_name}",
             "detach": True,
-            "ports": {'8000/tcp': port},
+            "ports": ports_dict,
             "volumes": volumes,
             "environment": environment,
             "mem_limit": "512m",
@@ -98,8 +110,12 @@ class DockerManager:
             # 4. 启动容器
             container = self.client.containers.run(**run_kwargs)
             
-            logger.info(f"Container started: {container.id} on port {port}")
-            return {"container_id": container.id, "port": port}
+            logger.info(f"Container started: {container.id} with ports {port_mappings}")
+            return {
+                "container_id": container.id, 
+                "port": main_port,
+                "ports": port_mappings  # {container_port: host_port}
+            }
 
         except Exception as e:
             logger.error(f"Failed to start container: {e}")
