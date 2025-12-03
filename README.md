@@ -10,9 +10,18 @@ An enterprise-grade platform for managing Model Context Protocol (MCP) servers w
 - **System Monitoring**: Real-time Docker status, container, and image information
 - **Archive Support**: Upload `.py`, `.zip`, `.tar.gz`, `.tar` files
 - **Custom Commands**: Configure custom startup commands (e.g., `uv run main.py`)
-- **Port Management**: Automatic or fixed port allocation
+- **Port Management**: Automatic or fixed port allocation with port pool management
+- **Environment Variables**: Secure environment variable management with secret masking
+- **Multi-Port Support**: Configure multiple ports for complex service architectures
 - **Authentication**: Secure username/password login with JWT
 - **Modern UI**: Beautiful, responsive interface built with React and Tailwind CSS
+
+## 📚 Documentation
+
+- [快速开始指南](docs/quick-start.md) - 新功能使用指南和最佳实践
+- [部署指南](docs/deployment.md) - 完整的部署说明和故障排查
+- [问题修复记录](docs/fixes.md) - 已知问题和解决方案
+- [更新日志](CHANGELOG.md) - 版本更新历史
 
 ## 📋 Prerequisites
 
@@ -87,8 +96,12 @@ mcp-fleet/
 │   │   ├── lib/           # Utilities and API client
 │   │   └── routes/        # TanStack Router routes
 │   └── package.json       # Node.js dependencies
+├── docs/                  # Documentation
+│   ├── quick-start.md     # Quick start guide
+│   ├── deployment.md      # Deployment guide
+│   └── fixes.md           # Bug fixes and solutions
 ├── prd.md                 # Product Requirements Document
-├── README_DEPLOY.md       # Deployment guide
+├── CHANGELOG.md           # Version history
 └── build_and_run.sh       # Build automation script
 ```
 
@@ -162,7 +175,7 @@ The platform uses JWT-based authentication:
 
 ## 🚢 Deployment
 
-See [README_DEPLOY.md](./README_DEPLOY.md) for detailed deployment instructions.
+See [部署指南](docs/deployment.md) for detailed deployment instructions.
 
 ### Quick Deploy
 
@@ -216,11 +229,14 @@ rm backend/mcp_platform.db
    - **Name**: Unique identifier
    - **Description**: Optional description
    - **Entry Object**: Python object name (default: `mcp`)
-   - **Port**: Optional fixed port (30000-40000)
+   - **Environment Variables**: Add key-value pairs (mark sensitive ones as secrets)
+   - **Ports**: Optional ports (comma-separated for multiple, or leave empty for auto-allocation)
    - **Command**: Optional custom command (e.g., `uv`)
    - **Arguments**: Optional args (e.g., `run main.py`)
    - **File**: Upload `.py` file or archive (`.zip`, `.tar.gz`)
 3. Click "Create"
+
+For detailed usage instructions, see the [快速开始指南](docs/quick-start.md).
 
 ### Managing Servers
 
@@ -289,5 +305,5 @@ Built with:
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: December 2024
+**Version**: 1.1.0  
+**Last Updated**: December 2025
