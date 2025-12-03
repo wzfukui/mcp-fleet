@@ -25,9 +25,11 @@ export function DashboardOverview() {
     error_servers: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [version, setVersion] = useState('加载中...')
 
   useEffect(() => {
     fetchStats()
+    fetchVersion()
   }, [])
 
   const fetchStats = async () => {
@@ -47,6 +49,16 @@ export function DashboardOverview() {
       console.error('Failed to fetch stats:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchVersion = async () => {
+    try {
+      const response = await api.get('/system/version')
+      setVersion(`v${response.data.version}`)
+    } catch (error) {
+      console.error('Failed to fetch version:', error)
+      setVersion('v1.0.0')
     }
   }
 
@@ -182,7 +194,7 @@ export function DashboardOverview() {
             <div className='space-y-2'>
               <div className='flex justify-between'>
                 <span className='text-sm text-muted-foreground'>平台版本</span>
-                <span className='text-sm font-medium'>v1.0.0</span>
+                <span className='text-sm font-medium'>{version}</span>
               </div>
               <div className='flex justify-between'>
                 <span className='text-sm text-muted-foreground'>运行时间</span>

@@ -22,7 +22,10 @@ logger = logging.getLogger(__name__)
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="EMCP Platform", version="1.0.0")
+# 版本号定义
+VERSION = "1.0.0"
+
+app = FastAPI(title="EMCP Platform", version=VERSION)
 
 # 注册认证路由
 app.include_router(auth_router)
@@ -449,6 +452,15 @@ def server_action(
 
     return {"message": "Action not supported"}
 
+@app.get("/api/system/version")
+def get_version():
+    """获取平台版本信息（无需认证）"""
+    return {
+        "version": VERSION,
+        "name": "MCP Fleet",
+        "description": "MCP Server Management Platform"
+    }
+
 @app.get("/api/system/ports")
 def get_port_pool_status(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """获取端口池状态：可用端口范围、已分配端口等信息"""
@@ -561,7 +573,8 @@ def get_system_status(current_user = Depends(get_current_user)):
                 "docker_available": False,
                 "error": "Docker client not initialized",
                 "containers": [],
-                "images": []
+                "images": [],
+                "platform_version": VERSION
             }
         
         # 获取所有容器
@@ -606,7 +619,8 @@ def get_system_status(current_user = Depends(get_current_user)):
             "docker_version": docker_version.get("Version", "Unknown"),
             "api_version": docker_version.get("ApiVersion", "Unknown"),
             "containers": containers,
-            "images": images
+            "images": images,
+            "platform_version": VERSION
         }
     except Exception as e:
         logger.error(f"Error getting system status: {e}")
