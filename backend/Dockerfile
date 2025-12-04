@@ -49,6 +49,12 @@ RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.li
     # Telnet 客户端
     telnet \
     \
+    # MySQL 客户端工具
+    default-mysql-client \
+    \
+    # Redis 客户端工具
+    redis-tools \
+    \
     # 字体支持（PDF/图片生成可能需要）
     fonts-liberation \
     libfreetype6-dev \
