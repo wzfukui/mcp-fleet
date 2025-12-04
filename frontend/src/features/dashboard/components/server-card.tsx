@@ -10,7 +10,14 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Play, Square, Copy, Terminal, Settings2 } from 'lucide-react'
+import { Play, Square, Copy, Terminal, Settings2, Trash2, RefreshCw, MoreVertical } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { EditServerDialog } from './edit-server-dialog'
@@ -25,11 +32,14 @@ export function ServerCard({ server, onUpdate }: ServerCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
 
-  const handleAction = async (action: 'start' | 'stop' | 'restart') => {
+  const handleAction = async (action: 'start' | 'stop' | 'restart' | 'remove_container' | 'rebuild') => {
     setIsLoading(true)
     try {
       await mcpApi.serverAction(server.id, action)
-      toast.success(`Server ${action}ed successfully`)
+      const actionText = action === 'remove_container' ? 'Container removed' : 
+                        action === 'rebuild' ? 'Server rebuilt' :
+                        `Server ${action}ed`
+      toast.success(`${actionText} successfully`)
       onUpdate()
     } catch (error) {
       handleApiError(error, `Failed to ${action} server`)
@@ -125,6 +135,46 @@ export function ServerCard({ server, onUpdate }: ServerCardProps) {
             >
               <Settings2 className='h-3 w-3' />
             </Button>
+            
+            {/* 更多操作菜单 */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant='outline' size='sm'>
+                  <MoreVertical className='h-3 w-3' />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align='end'>
+                {server.status === 'error' && (
+                  <>
+                    <DropdownMenuItem onClick={() => handleAction('remove_container')}>
+                      <Trash2 className='mr-2 h-4 w-4' />
+                      删除容器
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleAction('rebuild')}>
+                      <RefreshCw className='mr-2 h-4 w-4' />
+                      重新构建
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {server.status === 'stopped' && (
+                  <>
+                    <DropdownMenuItem onClick={() => handleAction('rebuild')}>
+                      <RefreshCw className='mr-2 h-4 w-4' />
+                      强制重建
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem 
+                  onClick={() => handleAction('remove_container')}
+                  className='text-orange-600'
+                >
+                  <Trash2 className='mr-2 h-4 w-4' />
+                  删除容器（保留数据）
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {server.status === 'running' ? (
             <div className='flex space-x-2'>

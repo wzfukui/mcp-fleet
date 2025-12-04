@@ -96,8 +96,8 @@ async def create_server(
     command: str = Form(None), # 自定义命令
     args: str = Form(None), # 自定义参数
     env_vars: str = Form(None), # 环境变量 JSON 字符串
-    config_files: str = Form(None), # 配置文件 JSON 字符串 [{"filename": "config/dev.json", "content": "..."}]
     file: UploadFile = File(...),
+    config_files: List[UploadFile] = File(None), # 配置文件列表（上传模式）
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -176,33 +176,30 @@ async def create_server(
     db.add(db_server)
     db.commit()
     
-    # 6. 处理配置文件
+    # 6. 处理配置文件（上传模式）
     if config_files:
-        try:
-            config_list = json.loads(config_files)
-            data_path = os.path.join(base_path, "data")
-            os.makedirs(data_path, exist_ok=True)
-            
-            for cfg in config_list:
-                filename = cfg.get('filename', '')
-                content = cfg.get('content', '')
+        data_path = os.path.join(base_path, "data")
+        os.makedirs(data_path, exist_ok=True)
+        
+        for uploaded_file in config_files:
+            if uploaded_file.filename:
+                # 读取文件内容
+                content = await uploaded_file.read()
+                content_str = content.decode('utf-8')
                 
                 # 保存到数据库
                 db_config = models.ConfigFile(
                     server_id=server_id,
-                    filename=filename,
-                    content=content
+                    filename=uploaded_file.filename,
+                    content=content_str
                 )
                 db.add(db_config)
                 
                 # 写入文件到 data 目录
-                file_path = os.path.join(data_path, filename)
+                file_path = os.path.join(data_path, uploaded_file.filename)
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                with open(file_path, 'w', encoding='utf-8') as f:
+                with open(file_path, 'wb') as f:
                     f.write(content)
-                    
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="配置文件格式错误")
     
     # 7. 处理环境变量
     if env_vars:
@@ -406,6 +403,79 @@ def server_action(
         server.host_port = None
         db.commit()
         return {"message": "Server stopped"}
+        
+    elif action.action == "remove_container":
+        # 只删除容器，保留数据
+        if server.container_id:
+            try:
+                docker_manager.stop_container(server.container_id)
+                logger.info(f"Container {server.container_id} removed for server {server_id}")
+            except Exception as e:
+                logger.warning(f"Failed to remove container: {e}")
+        
+        server.status = models.ServerStatus.STOPPED
+        server.container_id = None
+        server.host_port = None
+        db.commit()
+        return {"message": "Container removed, data preserved"}
+    
+    elif action.action == "rebuild":
+        # 强制重建：删除容器 + 重新启动
+        if server.container_id:
+            try:
+                docker_manager.stop_container(server.container_id)
+            except Exception as e:
+                logger.warning(f"Failed to stop container during rebuild: {e}")
+        
+        server.status = models.ServerStatus.STOPPED
+        server.container_id = None
+        server.host_port = None
+        db.commit()
+        
+        # 重新启动（复用启动逻辑）
+        env_map = {env.key: env.value for env in server.env_vars}
+        
+        cmd_list = None
+        if server.command:
+            cmd_list = [server.command]
+            if server.args:
+                try:
+                    args = json.loads(server.args)
+                    if isinstance(args, list):
+                        cmd_list.extend(args)
+                    else:
+                        cmd_list.extend(server.args.split())
+                except:
+                    cmd_list.extend(server.args.split())
+        
+        requested_ports = None
+        if server.ports:
+            try:
+                requested_ports = [int(p.strip()) for p in server.ports.split(',') if p.strip()]
+            except ValueError:
+                logger.warning(f"Failed to parse ports: {server.ports}")
+        
+        try:
+            result = docker_manager.run_container(
+                server_id=server.id,
+                server_name=server.name,
+                host_base_path=server.source_code_path,
+                env_vars=env_map,
+                requested_ports=requested_ports,
+                command=cmd_list
+            )
+            
+            server.container_id = result['container_id']
+            server.host_port = result['port']
+            server.host_ports = json.dumps(result.get('ports', {}))
+            server.status = models.ServerStatus.RUNNING
+            db.commit()
+            
+            return {"message": "Server rebuilt successfully", "port": result['port']}
+        except Exception as e:
+            server.status = models.ServerStatus.ERROR
+            db.commit()
+            raise HTTPException(status_code=500, detail=f"Failed to rebuild: {str(e)}")
         
     elif action.action == "restart":
         # 简化版重启：先停后起
