@@ -200,7 +200,7 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
           <Plus className='mr-2 h-4 w-4' /> Create Server
         </Button>
       </DialogTrigger>
-      <DialogContent className='sm:max-w-[90vw] max-h-[95vh] overflow-y-auto'>
+      <DialogContent className='sm:max-w-[68vw] max-h-[95vh] overflow-y-auto'>
         <DialogHeader>
           <DialogTitle>创建 MCP 服务器</DialogTitle>
           <DialogDescription>
