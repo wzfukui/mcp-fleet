@@ -220,6 +220,115 @@ async def create_server(
     db.refresh(db_server)
     return db_server
 
+@app.post("/api/servers/{server_id}/upload-code")
+async def upload_code(
+    server_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """重新上传代码包"""
+    server = db.query(models.MCPServer).filter(models.MCPServer.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    
+    if server.status == models.ServerStatus.RUNNING:
+        raise HTTPException(status_code=400, detail="请先停止服务器再上传代码")
+    
+    # 备份旧代码
+    app_path = os.path.join(server.source_code_path, "app")
+    backup_path = os.path.join(server.source_code_path, "app.backup")
+    if os.path.exists(app_path):
+        if os.path.exists(backup_path):
+            shutil.rmtree(backup_path)
+        shutil.move(app_path, backup_path)
+    
+    os.makedirs(app_path, exist_ok=True)
+    
+    try:
+        # 保存并解压新代码
+        filename = file.filename
+        file_ext = os.path.splitext(filename)[1].lower()
+        file_location = os.path.join(app_path, filename)
+        
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(file.file, file_object)
+        
+        # 解压逻辑
+        if file_ext == ".zip":
+            with zipfile.ZipFile(file_location, 'r') as zip_ref:
+                zip_ref.extractall(app_path)
+            os.remove(file_location)
+        elif file_ext in [".tar", ".gz", ".tgz"]:
+            with tarfile.open(file_location, "r:*") as tar_ref:
+                tar_ref.extractall(app_path)
+            os.remove(file_location)
+        
+        # 删除备份
+        if os.path.exists(backup_path):
+            shutil.rmtree(backup_path)
+        
+        return {"message": "代码上传成功，请重启服务器"}
+    
+    except Exception as e:
+        # 恢复备份
+        if os.path.exists(backup_path):
+            if os.path.exists(app_path):
+                shutil.rmtree(app_path)
+            shutil.move(backup_path, app_path)
+        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+
+@app.post("/api/servers/{server_id}/upload-config")
+async def upload_config_files(
+    server_id: str,
+    config_files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """重新上传配置文件"""
+    server = db.query(models.MCPServer).filter(models.MCPServer.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+    
+    data_path = os.path.join(server.source_code_path, "data")
+    os.makedirs(data_path, exist_ok=True)
+    
+    uploaded_files = []
+    for uploaded_file in config_files:
+        if uploaded_file.filename:
+            # 读取文件内容
+            content = await uploaded_file.read()
+            content_str = content.decode('utf-8')
+            
+            # 检查是否已存在
+            existing = db.query(models.ConfigFile).filter(
+                models.ConfigFile.server_id == server_id,
+                models.ConfigFile.filename == uploaded_file.filename
+            ).first()
+            
+            if existing:
+                # 更新现有配置
+                existing.content = content_str
+            else:
+                # 新增配置
+                db_config = models.ConfigFile(
+                    server_id=server_id,
+                    filename=uploaded_file.filename,
+                    content=content_str
+                )
+                db.add(db_config)
+            
+            # 写入文件到 data 目录
+            file_path = os.path.join(data_path, uploaded_file.filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, 'wb') as f:
+                f.write(content)
+            
+            uploaded_files.append(uploaded_file.filename)
+    
+    db.commit()
+    return {"message": f"成功上传 {len(uploaded_files)} 个配置文件", "files": uploaded_files}
+
 @app.put("/api/servers/{server_id}", response_model=schemas.MCPServer)
 def update_server(
     server_id: str,
