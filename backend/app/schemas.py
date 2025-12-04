@@ -18,6 +18,22 @@ class EnvVar(EnvVarBase):
     class Config:
         from_attributes = True
 
+class ConfigFileBase(BaseModel):
+    filename: str
+    content: str
+
+class ConfigFileCreate(ConfigFileBase):
+    pass
+
+class ConfigFile(ConfigFileBase):
+    id: int
+    server_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class MCPServerBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -48,6 +64,7 @@ class MCPServer(MCPServerBase):
     created_at: datetime
     updated_at: datetime
     env_vars: List[EnvVar] = []
+    config_files: List[ConfigFile] = []
     
     # 计算属性：SSE 连接地址
     @property

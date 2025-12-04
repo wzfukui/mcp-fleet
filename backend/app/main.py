@@ -30,6 +30,10 @@ app = FastAPI(title="EMCP Platform", version=VERSION)
 # 注册认证路由
 app.include_router(auth_router)
 
+# 注册配置文件路由
+from .api import config_files
+app.include_router(config_files.router)
+
 # 配置 CORS (允许 3100 端口)
 # 允许的环境变量配置: ALLOWED_ORIGINS (逗号分隔)
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3100,http://localhost:5173")
@@ -92,6 +96,7 @@ async def create_server(
     command: str = Form(None), # 自定义命令
     args: str = Form(None), # 自定义参数
     env_vars: str = Form(None), # 环境变量 JSON 字符串
+    config_files: str = Form(None), # 配置文件 JSON 字符串 [{"filename": "config/dev.json", "content": "..."}]
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
@@ -171,7 +176,35 @@ async def create_server(
     db.add(db_server)
     db.commit()
     
-    # 6. 处理环境变量
+    # 6. 处理配置文件
+    if config_files:
+        try:
+            config_list = json.loads(config_files)
+            data_path = os.path.join(base_path, "data")
+            os.makedirs(data_path, exist_ok=True)
+            
+            for cfg in config_list:
+                filename = cfg.get('filename', '')
+                content = cfg.get('content', '')
+                
+                # 保存到数据库
+                db_config = models.ConfigFile(
+                    server_id=server_id,
+                    filename=filename,
+                    content=content
+                )
+                db.add(db_config)
+                
+                # 写入文件到 data 目录
+                file_path = os.path.join(data_path, filename)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                    
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="配置文件格式错误")
+    
+    # 7. 处理环境变量
     if env_vars:
         try:
             env_list = json.loads(env_vars)

@@ -37,6 +37,9 @@ class MCPServer(Base):
 
     # 关联环境变量
     env_vars = relationship("EnvironmentVariable", back_populates="server", cascade="all, delete-orphan")
+    
+    # 关联配置文件
+    config_files = relationship("ConfigFile", back_populates="server", cascade="all, delete-orphan")
 
 class EnvironmentVariable(Base):
     __tablename__ = "env_vars"
@@ -48,4 +51,17 @@ class EnvironmentVariable(Base):
     is_secret = Column(Boolean, default=False)
 
     server = relationship("MCPServer", back_populates="env_vars")
+
+class ConfigFile(Base):
+    __tablename__ = "config_files"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    server_id = Column(String, ForeignKey("mcp_servers.id"))
+    filename = Column(String)  # 相对路径，如 config/dev.json
+    content = Column(String)   # 文件内容
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    server = relationship("MCPServer", back_populates="config_files")
+
 
