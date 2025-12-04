@@ -35,6 +35,11 @@ interface EnvVar {
   is_secret: boolean
 }
 
+interface ConfigFile {
+  filename: string
+  content: string
+}
+
 interface FormData {
   name: string
   description: string
@@ -49,6 +54,7 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
+  const [configFiles, setConfigFiles] = useState<ConfigFile[]>([])
   const [showSecrets, setShowSecrets] = useState<Record<number, boolean>>({})
 
   const form = useForm<FormData>({
@@ -80,6 +86,20 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
     setShowSecrets({ ...showSecrets, [index]: !showSecrets[index] })
   }
 
+  const addConfigFile = () => {
+    setConfigFiles([...configFiles, { filename: '', content: '' }])
+  }
+
+  const removeConfigFile = (index: number) => {
+    setConfigFiles(configFiles.filter((_, i) => i !== index))
+  }
+
+  const updateConfigFile = (index: number, field: keyof ConfigFile, value: string) => {
+    const updated = [...configFiles]
+    updated[index] = { ...updated[index], [field]: value }
+    setConfigFiles(updated)
+  }
+
   async function onSubmit(data: FormData) {
     if (!data.file || data.file.length === 0) {
       toast.error('请选择文件')
@@ -90,6 +110,14 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
     for (const env of envVars) {
       if (!env.key.trim()) {
         toast.error('环境变量名称不能为空')
+        return
+      }
+    }
+
+    // 验证配置文件
+    for (const cfg of configFiles) {
+      if (!cfg.filename.trim()) {
+        toast.error('配置文件名不能为空')
         return
       }
     }
@@ -108,6 +136,11 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
       if (envVars.length > 0) {
         formData.append('env_vars', JSON.stringify(envVars))
       }
+
+      // 添加配置文件
+      if (configFiles.length > 0) {
+        formData.append('config_files', JSON.stringify(configFiles))
+      }
       
       formData.append('file', data.file[0])
 
@@ -116,6 +149,7 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
       setOpen(false)
       form.reset()
       setEnvVars([])
+      setConfigFiles([])
       setShowSecrets({})
       onServerCreated()
     } catch (error) {
@@ -304,6 +338,51 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* 配置文件部分 */}
+            <div className='space-y-3'>
+              <div className='flex items-center justify-between'>
+                <FormLabel>配置文件 (可选)</FormLabel>
+                <Button type='button' variant='outline' size='sm' onClick={addConfigFile}>
+                  <Plus className='mr-1 h-3 w-3' /> 添加配置文件
+                </Button>
+              </div>
+              
+              {configFiles.length > 0 && (
+                <div className='space-y-3 max-h-[300px] overflow-y-auto border rounded-md p-3'>
+                  {configFiles.map((cfg, index) => (
+                    <div key={index} className='space-y-2 pb-3 border-b last:border-b-0'>
+                      <div className='flex items-center gap-2'>
+                        <Input
+                          placeholder='文件路径 (如 config/dev.json)'
+                          value={cfg.filename}
+                          onChange={(e) => updateConfigFile(index, 'filename', e.target.value)}
+                          className='flex-1'
+                        />
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => removeConfigFile(index)}
+                          className='h-8 w-8 p-0'
+                        >
+                          <Trash2 className='h-4 w-4 text-red-500' />
+                        </Button>
+                      </div>
+                      <Textarea
+                        placeholder='文件内容...'
+                        value={cfg.content}
+                        onChange={(e) => updateConfigFile(index, 'content', e.target.value)}
+                        className='font-mono text-sm min-h-[120px]'
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className='text-xs text-muted-foreground'>
+                配置文件将保存到容器的 /app/data/ 目录，启动参数中使用 /app/data/文件路径 引用
+              </p>
             </div>
 
             <FormField
