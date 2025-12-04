@@ -76,6 +76,16 @@ def get_data_root():
 DATA_ROOT = get_data_root()
 logger.info(f"Using Data Root: {DATA_ROOT}")
 
+@app.get("/api/images")
+def list_images(current_user = Depends(get_current_user)):
+    """获取本地 Docker 镜像列表"""
+    try:
+        images = docker_manager.list_images()
+        return {"images": images}
+    except Exception as e:
+        logger.error(f"Failed to list images: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list images: {str(e)}")
+
 @app.get("/api/servers", response_model=List[schemas.MCPServer])
 def list_servers(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     return db.query(models.MCPServer).all()

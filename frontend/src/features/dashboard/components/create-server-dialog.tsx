@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,9 +21,16 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { mcpApi } from '@/lib/api'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { mcpApi, type DockerImage } from '@/lib/api'
 import { toast } from 'sonner'
-import { Plus, Trash2, Eye, EyeOff, Settings, FileCode, Upload } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Settings, FileCode, Upload, RefreshCw } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 
 interface CreateServerDialogProps {
@@ -58,6 +65,8 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
   const [envVars, setEnvVars] = useState<EnvVar[]>([])
   const [configFiles, setConfigFiles] = useState<ConfigFileUpload[]>([])
   const [showSecrets, setShowSecrets] = useState<Record<number, boolean>>({})
+  const [images, setImages] = useState<DockerImage[]>([])
+  const [loadingImages, setLoadingImages] = useState(false)
 
   const form = useForm<FormData>({
     defaultValues: {
@@ -70,6 +79,32 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
       image: 'corp/mcp-base:latest',
     },
   })
+
+  // 加载镜像列表
+  const loadImages = async () => {
+    setLoadingImages(true)
+    try {
+      const imageList = await mcpApi.getImages()
+      setImages(imageList)
+      // 如果列表中有镜像且当前值为默认值，设置为第一个镜像
+      if (imageList.length > 0 && form.getValues('image') === 'corp/mcp-base:latest') {
+        const defaultImage = imageList.find(img => img.name === 'corp/mcp-base:latest') || imageList[0]
+        form.setValue('image', defaultImage.name)
+      }
+    } catch (error) {
+      console.error('Failed to load images:', error)
+      toast.error('加载镜像列表失败')
+    } finally {
+      setLoadingImages(false)
+    }
+  }
+
+  // 对话框打开时加载镜像列表
+  useEffect(() => {
+    if (open) {
+      loadImages()
+    }
+  }, [open])
 
   const addEnvVar = () => {
     setEnvVars([...envVars, { key: '', value: '', is_secret: false }])
@@ -262,14 +297,44 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
                 name='image'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>基础镜像</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder='corp/mcp-base:latest' 
-                        {...field}
-                        value={field.value || ''}
-                      />
-                    </FormControl>
+                    <div className='flex items-center justify-between'>
+                      <FormLabel>基础镜像</FormLabel>
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='sm'
+                        onClick={loadImages}
+                        disabled={loadingImages}
+                        className='h-6 px-2'
+                      >
+                        <RefreshCw className={`h-3 w-3 ${loadingImages ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder='选择镜像' />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {images.length === 0 ? (
+                          <SelectItem value='corp/mcp-base:latest'>
+                            corp/mcp-base:latest (默认)
+                          </SelectItem>
+                        ) : (
+                          images.map((img) => (
+                            <SelectItem key={img.name} value={img.name}>
+                              <div className='flex items-center justify-between w-full'>
+                                <span className='font-mono text-sm'>{img.name}</span>
+                                <span className='text-xs text-muted-foreground ml-2'>
+                                  {img.size}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

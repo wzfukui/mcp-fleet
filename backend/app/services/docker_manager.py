@@ -147,6 +147,49 @@ class DockerManager:
                 yield line.decode('utf-8')
         except Exception as e:
             yield f"Error reading logs: {e}"
+    
+    def list_images(self) -> List[Dict[str, str]]:
+        """
+        获取本地 Docker 镜像列表
+        返回: [{"name": "corp/mcp-base:latest", "id": "sha256:...", "size": "1.14GB"}]
+        """
+        if not self.client:
+            raise RuntimeError("Docker client not initialized")
+        
+        try:
+            images = self.client.images.list()
+            result = []
+            
+            for img in images:
+                # 获取镜像标签
+                tags = img.tags if img.tags else []
+                
+                # 计算镜像大小（转换为人类可读格式）
+                size_bytes = img.attrs.get('Size', 0)
+                size_mb = size_bytes / (1024 * 1024)
+                if size_mb > 1024:
+                    size_str = f"{size_mb / 1024:.2f}GB"
+                else:
+                    size_str = f"{size_mb:.0f}MB"
+                
+                # 每个标签作为一个独立的镜像选项
+                for tag in tags:
+                    result.append({
+                        "name": tag,
+                        "id": img.short_id,
+                        "size": size_str
+                    })
+            
+            # 按名称排序，确保 corp/mcp-base 在前面
+            result.sort(key=lambda x: (
+                0 if x["name"].startswith("corp/mcp-base") else 1,
+                x["name"]
+            ))
+            
+            return result
+        except Exception as e:
+            logger.error(f"Failed to list images: {e}")
+            return []
 
 # 单例模式
 docker_manager = DockerManager()
