@@ -3,8 +3,13 @@
 
 set -e
 
+# 切换到 backend 目录
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$BACKEND_DIR"
+
 IMAGE_NAME="corp/mcp-base:latest"
-OUTPUT_DIR="../dist"
+OUTPUT_DIR="dist"
 OUTPUT_FILE="mcp-base-latest.tar"
 
 echo "=========================================="

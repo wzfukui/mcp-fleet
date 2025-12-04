@@ -20,8 +20,10 @@ IMAGE_NAME="corp/mcp-base"
 IMAGE_TAG="latest"
 FULL_IMAGE_NAME="${IMAGE_NAME}:${IMAGE_TAG}"
 
-# 切换到 backend 目录
-cd "$(dirname "$0")"
+# 切换到 backend 目录（脚本在 backend/scripts/ 下）
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$BACKEND_DIR"
 echo -e "${YELLOW}当前目录: $(pwd)${NC}"
 
 # 检查必要文件

@@ -3,8 +3,13 @@
 
 set -e
 
+# 切换到 backend 目录
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$BACKEND_DIR"
+
 # 默认从 dist 目录加载
-DEFAULT_FILE="../dist/mcp-base-latest.tar"
+DEFAULT_FILE="dist/mcp-base-latest.tar"
 IMAGE_FILE="${1:-$DEFAULT_FILE}"
 
 echo "=========================================="
