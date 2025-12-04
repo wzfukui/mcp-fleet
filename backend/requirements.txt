@@ -12,7 +12,8 @@ passlib[bcrypt]>=1.7.4
 bcrypt==3.2.2
 
 # MCP 框架
-fastmcp>=2.0.0
+mcp>=0.1.0
+fastmcp>=2.13.0
 
 # ============================================
 # 数据库驱动
@@ -20,6 +21,7 @@ fastmcp>=2.0.0
 # MySQL
 pymysql>=1.1.0
 mysqlclient>=2.2.0
+aiomysql>=0.2.0
 
 # PostgreSQL
 psycopg2-binary>=2.9.9
@@ -100,6 +102,9 @@ jinja2>=3.1.0
 
 # 加密工具
 cryptography>=41.0.0
+
+# 环境变量
+python-dotenv>=1.0.0
 
 # URL 处理
 urllib3>=2.1.0
