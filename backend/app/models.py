@@ -24,6 +24,7 @@ class MCPServer(Base):
     # 启动参数
     command = Column(String, nullable=True) # 自定义启动命令 (如 uv)
     args = Column(String, nullable=True) # 自定义参数 (JSON string list or space separated)
+    image = Column(String, default="corp/mcp-base:latest") # 基础镜像
 
     # 运行时状态
     status = Column(Enum(ServerStatus), default=ServerStatus.STOPPED)

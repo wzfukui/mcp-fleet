@@ -41,6 +41,7 @@ class MCPServerBase(BaseModel):
     ports: Optional[str] = None # 用户配置的端口列表（逗号分隔）
     command: Optional[str] = None
     args: Optional[str] = None
+    image: Optional[str] = "corp/mcp-base:latest" # 基础镜像
 
 class MCPServerCreate(MCPServerBase):
     pass

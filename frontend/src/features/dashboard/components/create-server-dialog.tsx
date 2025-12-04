@@ -20,9 +20,10 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { mcpApi } from '@/lib/api'
 import { toast } from 'sonner'
-import { Plus, Trash2, Eye, EyeOff } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Settings, FileCode, Upload } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 
 interface CreateServerDialogProps {
@@ -47,6 +48,7 @@ interface FormData {
   ports?: string
   command?: string
   args?: string
+  image?: string
   file: FileList
 }
 
@@ -65,6 +67,7 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
       ports: '',
       command: '',
       args: '',
+      image: 'corp/mcp-base:latest',
     },
   })
 
@@ -125,6 +128,7 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
       if (data.ports) formData.append('ports', data.ports)
       if (data.command) formData.append('command', data.command)
       if (data.args) formData.append('args', data.args)
+      if (data.image) formData.append('image', data.image)
       
       // 添加环境变量
       if (envVars.length > 0) {
@@ -161,15 +165,35 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
           <Plus className='mr-2 h-4 w-4' /> Create Server
         </Button>
       </DialogTrigger>
-      <DialogContent className='sm:max-w-[900px] overflow-y-auto max-h-[95vh]'>
+      <DialogContent className='max-w-6xl max-h-[95vh] overflow-y-auto'>
         <DialogHeader>
           <DialogTitle>创建 MCP 服务器</DialogTitle>
           <DialogDescription>
             上传 Python 脚本或压缩包 (.zip, .tar.gz) 来部署新的 MCP 服务器
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
+
+        <Tabs defaultValue='basic' className='w-full'>
+          <TabsList className='grid w-full grid-cols-3'>
+            <TabsTrigger value='basic'>
+              <Settings className='mr-2 h-4 w-4' />
+              基本配置
+            </TabsTrigger>
+            <TabsTrigger value='code'>
+              <FileCode className='mr-2 h-4 w-4' />
+              代码 & 配置
+            </TabsTrigger>
+            <TabsTrigger value='advanced'>
+              <Upload className='mr-2 h-4 w-4' />
+              高级选项
+            </TabsTrigger>
+          </TabsList>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
+              
+              {/* 基本配置 Tab */}
+              <TabsContent value='basic' className='space-y-4'>
             <FormField
               control={form.control}
               name='name'
@@ -202,13 +226,13 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
                 </FormItem>
               )}
             />
-            <div className='grid grid-cols-2 gap-4'>
+            <div className='grid grid-cols-3 gap-4'>
               <FormField
                 control={form.control}
                 name='entry_object'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>入口对象 (仅 Python)</FormLabel>
+                    <FormLabel>入口对象</FormLabel>
                     <FormControl>
                       <Input placeholder='mcp' {...field} />
                     </FormControl>
@@ -233,35 +257,15 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
                   </FormItem>
                 )}
               />
-            </div>
-            
-            <div className='grid grid-cols-2 gap-4'>
               <FormField
                 control={form.control}
-                name='command'
+                name='image'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>自定义命令 (可选)</FormLabel>
+                    <FormLabel>基础镜像</FormLabel>
                     <FormControl>
                       <Input 
-                        placeholder='uv, python, node...' 
-                        {...field}
-                        value={field.value || ''}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='args'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>参数 (可选)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder='run main.py, --dir ...' 
+                        placeholder='corp/mcp-base:latest' 
                         {...field}
                         value={field.value || ''}
                       />
@@ -271,6 +275,117 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
                 )}
               />
             </div>
+              </TabsContent>
+
+              {/* 代码 & 配置 Tab */}
+              <TabsContent value='code' className='space-y-4'>
+                <FormField
+                  control={form.control}
+                  name='file'
+                  render={({ field: { value, onChange, ...fieldProps } }) => (
+                    <FormItem>
+                      <FormLabel>上传代码 (.py, .zip, .tar.gz)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...fieldProps}
+                          type='file'
+                          accept='.py,.zip,.tar,.gz,.tgz'
+                          onChange={(event) => {
+                            onChange(event.target.files)
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 配置文件部分 */}
+                <div className='space-y-3'>
+                  <div className='flex items-center justify-between'>
+                    <FormLabel>配置文件 (可选)</FormLabel>
+                    <label>
+                      <input
+                        type='file'
+                        multiple
+                        onChange={handleConfigFileUpload}
+                        className='hidden'
+                      />
+                      <Button type='button' variant='outline' size='sm' asChild>
+                        <span>
+                          <Plus className='mr-1 h-3 w-3' /> 上传配置文件
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
+                  
+                  {configFiles.length > 0 && (
+                    <div className='space-y-2 border rounded-md p-3'>
+                      {configFiles.map((cfg, index) => (
+                        <div key={index} className='flex items-center justify-between py-2 px-3 bg-muted rounded-md'>
+                          <div className='flex items-center gap-2 flex-1'>
+                            <span className='text-sm font-mono'>{cfg.filename}</span>
+                            <span className='text-xs text-muted-foreground'>
+                              ({(cfg.file.size / 1024).toFixed(1)} KB)
+                            </span>
+                          </div>
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => removeConfigFile(index)}
+                            className='h-8 w-8 p-0'
+                          >
+                            <Trash2 className='h-4 w-4 text-red-500' />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className='text-xs text-muted-foreground'>
+                    配置文件将保存到容器的 /app/data/ 目录，启动参数中使用 /app/data/文件名 引用
+                  </p>
+                </div>
+              </TabsContent>
+
+              {/* 高级选项 Tab */}
+              <TabsContent value='advanced' className='space-y-4'>
+                <div className='grid grid-cols-2 gap-4'>
+                  <FormField
+                    control={form.control}
+                    name='command'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>自定义命令 (可选)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder='uv, python, node...' 
+                            {...field}
+                            value={field.value || ''}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='args'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>参数 (可选)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder='run main.py, --dir ...' 
+                            {...field}
+                            value={field.value || ''}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
             {/* 环境变量部分 */}
             <div className='space-y-3'>
@@ -333,81 +448,16 @@ export function CreateServerDialog({ onServerCreated }: CreateServerDialogProps)
                 </div>
               )}
             </div>
+              </TabsContent>
 
-            {/* 配置文件部分 */}
-            <div className='space-y-3'>
-              <div className='flex items-center justify-between'>
-                <FormLabel>配置文件 (可选)</FormLabel>
-                <label>
-                  <input
-                    type='file'
-                    multiple
-                    onChange={handleConfigFileUpload}
-                    className='hidden'
-                  />
-                  <Button type='button' variant='outline' size='sm' asChild>
-                    <span>
-                      <Plus className='mr-1 h-3 w-3' /> 上传配置文件
-                    </span>
-                  </Button>
-                </label>
-              </div>
-              
-              {configFiles.length > 0 && (
-                <div className='space-y-2 border rounded-md p-3'>
-                  {configFiles.map((cfg, index) => (
-                    <div key={index} className='flex items-center justify-between py-2 px-3 bg-muted rounded-md'>
-                      <div className='flex items-center gap-2 flex-1'>
-                        <span className='text-sm font-mono'>{cfg.filename}</span>
-                        <span className='text-xs text-muted-foreground'>
-                          ({(cfg.file.size / 1024).toFixed(1)} KB)
-                        </span>
-                      </div>
-                      <Button
-                        type='button'
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => removeConfigFile(index)}
-                        className='h-8 w-8 p-0'
-                      >
-                        <Trash2 className='h-4 w-4 text-red-500' />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className='text-xs text-muted-foreground'>
-                配置文件将保存到容器的 /app/data/ 目录，启动参数中使用 /app/data/文件名 引用
-              </p>
-            </div>
-
-            <FormField
-              control={form.control}
-              name='file'
-              render={({ field: { value, onChange, ...fieldProps } }) => (
-                <FormItem>
-                  <FormLabel>上传代码 (.py, .zip, .tar.gz)</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...fieldProps}
-                      type='file'
-                      accept='.py,.zip,.tar,.gz,.tgz'
-                      onChange={(event) => {
-                        onChange(event.target.files)
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button type='submit' disabled={isLoading}>
-                {isLoading ? '创建中...' : '创建'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+              <DialogFooter className='mt-6'>
+                <Button type='submit' disabled={isLoading}>
+                  {isLoading ? '创建中...' : '创建服务器'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </Tabs>
       </DialogContent>
     </Dialog>
   )

@@ -36,7 +36,8 @@ class DockerManager:
                       host_base_path: str, 
                       env_vars: Dict[str, str], 
                       requested_ports: Optional[List[int]] = None,
-                      command: Optional[List[str]] = None) -> Dict:
+                      command: Optional[List[str]] = None,
+                      image: str = BASE_IMAGE) -> Dict:
         """
         启动容器
         返回: {"container_id": str, "port": int, "ports": Dict[int, int]}
@@ -92,7 +93,7 @@ class DockerManager:
                      for container_port, host_port in port_mappings.items()}
 
         run_kwargs = {
-            "image": BASE_IMAGE,
+            "image": image,  # 使用传入的镜像参数
             "name": f"mcp-{server_name}",
             "detach": True,
             "ports": ports_dict,

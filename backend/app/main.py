@@ -95,6 +95,7 @@ async def create_server(
     ports: str = Form(None), # 允许用户指定端口列表（逗号分隔）
     command: str = Form(None), # 自定义命令
     args: str = Form(None), # 自定义参数
+    image: str = Form("corp/mcp-base:latest"), # 基础镜像
     env_vars: str = Form(None), # 环境变量 JSON 字符串
     file: UploadFile = File(...),
     config_files: List[UploadFile] = File(None), # 配置文件列表（上传模式）
@@ -171,6 +172,7 @@ async def create_server(
         ports=allocated_ports,  # 保存分配的端口
         command=command,
         args=args,
+        image=image,  # 保存基础镜像
         status=models.ServerStatus.STOPPED
     )
     db.add(db_server)
@@ -465,7 +467,8 @@ def server_action(
                 server.source_code_path, 
                 env_map,
                 requested_ports=requested_ports,
-                command=cmd_list
+                command=cmd_list,
+                image=server.image or "corp/mcp-base:latest"
             )
             
             server.container_id = result["container_id"]
@@ -571,7 +574,8 @@ def server_action(
                 host_base_path=server.source_code_path,
                 env_vars=env_map,
                 requested_ports=requested_ports,
-                command=cmd_list
+                command=cmd_list,
+                image=server.image or "corp/mcp-base:latest"
             )
             
             server.container_id = result['container_id']
@@ -631,7 +635,8 @@ def server_action(
                 server.source_code_path, 
                 env_map,
                 requested_ports=requested_ports,
-                command=cmd_list
+                command=cmd_list,
+                image=server.image or "corp/mcp-base:latest"
             )
             server.container_id = result["container_id"]
             server.host_port = result["port"]
